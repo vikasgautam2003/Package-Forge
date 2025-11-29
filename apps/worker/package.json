@@ -1,0 +1,27 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/dockerode": "^3.3.47",
+    "@types/node": "^22.19.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^2.0.44",
+    "ai": "^5.0.104",
+    "dockerode": "^4.0.9",
+    "dotenv": "^16.0.3",
+    "zod": "^4.1.13"
+  }
+}
