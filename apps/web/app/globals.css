@@ -1,1 +1,38 @@
 @import "tailwindcss";
+
+
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #333333 transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #27272a;
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #52525b;
+    cursor: grab;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+body {
+  background: #000000;
+  color: #ffffff;
+}

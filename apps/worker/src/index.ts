@@ -448,6 +448,19 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 import { Worker, Job } from 'bullmq';
 import { generatePackageCode, fixPackageCode } from './ai';
 import { runInSandbox } from './sandbox';
@@ -461,6 +474,7 @@ dotenv.config();
 interface PackageJobData {
   prompt: string;
   user?: string;
+  packageName?: string; // Added optional field
 }
 
 const connection = {
@@ -468,34 +482,73 @@ const connection = {
   port: 6379
 };
 
-/* -----------------------------------------------------
-   CLEAN CODE PIPELINE (CLI-SAFE, JSON-SAFE, AI-SAFE)
------------------------------------------------------ */
+// function cleanCode(content: string, fileName: string): string {
+//   let clean = content.trim(); 
+//   const ext = fileName.split('.').pop();
+
+//   // ---------------------------------------------------------
+//   // 1. UNWRAP "STRINGIFIED" CODE (The Only Place We Fix \n)
+//   // ---------------------------------------------------------
+//   // If Gemini returns "const a=1;\nconst b=2", we MUST fix the newlines.
+//   const looksStringified =
+//     (clean.startsWith('"') && clean.endsWith('"')) ||
+//     (clean.startsWith("'") && clean.endsWith("'"));
+
+//   if (looksStringified) {
+//     clean = clean.slice(1, -1);         // Remove wrapper quotes
+//     clean = clean.replace(/\\"/g, '"'); // Unescape internal quotes
+//     clean = clean.replace(/\\n/g, '\n'); // HERE is the only safe place to do this
+//   }
+
+//   // ---------------------------------------------------------
+//   // 2. PACKAGE.JSON FIXES
+//   // ---------------------------------------------------------
+//   if (fileName === "package.json") {
+//     try {
+//       return JSON.stringify(JSON.parse(clean), null, 2);
+//     } catch {
+//       try {
+//         const unescaped = clean.replace(/\\"/g, '"');
+//         return JSON.stringify(JSON.parse(unescaped), null, 2);
+//       } catch {
+//         return clean; 
+//       }
+//     }
+//   }
+
+//   // ---------------------------------------------------------
+//   // 3. FORCE SHEBANG ON INDEX.JS
+//   // ---------------------------------------------------------
+//   if (fileName === "index.js") {
+//      clean = fixShebang(clean);
+//   }
+
+//   // ---------------------------------------------------------
+//   // 4. FINAL CLEANUP
+//   // ---------------------------------------------------------
+//   // ❌ REMOVED: The global replace(/\\n/g, '\n') is GONE.
+//   // It was breaking valid code like: output.split('\n')
+  
+//   clean = clean.replace(/\r\n/g, '\n'); 
+//   return clean;
+// }
+
+
+
 function cleanCode(content: string, fileName: string): string {
-  let clean = content.trim(); 
+  let clean = content.trim();
   const ext = fileName.split('.').pop();
 
-  // --------------------------------------
-  // 1. UNWRAP "STRINGIFIED" CODE (The Root Cause)
-  // --------------------------------------
-  // Gemini often returns code wrapped in quotes like "const a=1;\nconst b=2;"
-  // We must detect this pattern and unwrap it.
   const looksStringified =
     (clean.startsWith('"') && clean.endsWith('"')) ||
     (clean.startsWith("'") && clean.endsWith("'"));
 
   if (looksStringified) {
-    clean = clean.slice(1, -1);         // Remove wrapper quotes
-    clean = clean.replace(/\\"/g, '"'); // Unescape internal quotes
-    
-    // CRITICAL: Convert literal "\n" characters into REAL newlines
-    // This turns the "One Line" back into "Many Lines"
-    clean = clean.replace(/\\n/g, '\n'); 
+    clean = clean.slice(1, -1);
+    clean = clean.replace(/\\"/g, '"');
+    clean = clean.replace(/\\n/g, '\n');
   }
 
-  // --------------------------------------
-  // 2. PACKAGE.JSON FIXES
-  // --------------------------------------
   if (fileName === "package.json") {
     try {
       return JSON.stringify(JSON.parse(clean), null, 2);
@@ -504,42 +557,27 @@ function cleanCode(content: string, fileName: string): string {
         const unescaped = clean.replace(/\\"/g, '"');
         return JSON.stringify(JSON.parse(unescaped), null, 2);
       } catch {
-        return clean; 
+        return clean;
       }
     }
   }
 
-  // --------------------------------------
-  // 3. FORCE SHEBANG ON INDEX.JS
-  // --------------------------------------
   if (fileName === "index.js") {
-     clean = fixShebang(clean);
+    clean = fixShebang(clean);
   }
 
-  // --------------------------------------
-  // 4. FINAL CLEANUP
-  // --------------------------------------
-  // Ensure we didn't miss any literal newlines in normal files
-  if (clean.includes('\\n')) {
-      clean = clean.replace(/\\n/g, '\n');
-  }
-  
-  clean = clean.replace(/\r\n/g, '\n'); 
+  clean = clean.replace(/\r\n/g, '\n');
   return clean;
 }
 
-// THE SHEBANG ENFORCER
-function fixShebang(code: string): string {
-  // 1. Remove existing shebang (even if malformed)
-  let clean = code.replace(/^#!.*\n?/, '').trim();
 
-  // 2. Add the correct one with TWO newlines
+
+
+function fixShebang(code: string): string {
+  let clean = code.replace(/^#!.*\n?/, '').trim();
   return `#!/usr/bin/env node\n\n${clean}`;
 }
 
-/* -----------------------------------------------------
-   JOB LOGGING (Console + Redis)
------------------------------------------------------ */
 async function log(job: Job, message: string) {
   console.log(message);
   await job.log(message);
@@ -547,9 +585,6 @@ async function log(job: Job, message: string) {
 
 console.log("👷 Worker is running! Waiting for jobs...");
 
-/* -----------------------------------------------------
-   MAIN WORKER
------------------------------------------------------ */
 const worker = new Worker<PackageJobData>(
   "package-generation",
   async (job: Job<PackageJobData>) => {
@@ -563,24 +598,24 @@ const worker = new Worker<PackageJobData>(
     try {
       await log(job, `🤖 Gemini is thinking about: "${job.data.prompt}"...`);
       let result = await generatePackageCode(job.data.prompt);
+      
+      // 🔥 THE CRITICAL FIX: Tell the Frontend the name IMMEDIATELY
+      await job.updateData({ ...job.data, packageName: result.packageName });
 
-      /* SELF-HEALING LOOP  */
       while (attempts < MAX_RETRIES && !isSuccess) {
         attempts++;
         await log(job, `\n--- 🔄 Attempt ${attempts}/${MAX_RETRIES} ---`);
 
-        // AI Fix pass
         if (attempts > 1) {
           result = await fixPackageCode(job.data.prompt, currentLogs);
+          // Update name again in case AI changed it
+          await job.updateData({ ...job.data, packageName: result.packageName });
           await log(job, `🚑 Applied Fixes. New Name: ${result.packageName}`);
         }
 
-        // Temp directory
         const tempDir = path.join(__dirname, "../temp", result.packageName);
-        await fs.rm(tempDir, { recursive: true, force: true });
         await fs.mkdir(tempDir, { recursive: true });
 
-        // Write files
         for (const file of result.files) {
           const cleaned = cleanCode(file.content, file.name);
           await fs.writeFile(path.join(tempDir, file.name), cleaned);
@@ -596,9 +631,6 @@ const worker = new Worker<PackageJobData>(
           isSuccess = true;
           await log(job, `✅ PASSED on Attempt ${attempts}!`);
 
-          /* -----------------------------------------------------
-             PUBLICATION SIMULATION
-          ----------------------------------------------------- */
           const token = process.env.NPM_TOKEN;
           if (!token) {
             await log(job, `⚠️ No NPM_TOKEN found. Skipping publish.`);
@@ -633,9 +665,8 @@ const worker = new Worker<PackageJobData>(
   },
   {
     connection,
-    lockDuration: 1000 * 60 * 5,       // 5 minutes
-    lockRenewTime: 1000 * 20,          // Renew every 20s
-    stalledInterval: 1000 * 60 * 60    // 1 hour
+    lockDuration: 1000 * 60 * 5,
+    lockRenewTime: 1000 * 20,
+    stalledInterval: 1000 * 60 * 60
   }
 );
-

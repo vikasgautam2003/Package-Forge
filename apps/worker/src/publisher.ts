@@ -19,7 +19,7 @@ export async function publishPackage(packagePath: string, token: string) {
 
         console.log(`    📦 Running npm publish...`);
 
-        const command = 'npm publish --access public';
+        const command = 'npm publish --access public --dry-run';
     
         const { stdout, stderr } = await execAsync(command, { 
         cwd: packagePath 

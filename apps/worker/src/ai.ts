@@ -13,52 +13,61 @@ export async function generatePackageCode(prompt: string) {
   const { object } = await generateObject({
     model: google('gemini-2.5-flash'),
     schema: PackageSchema,
-    prompt: `
-You are a Senior Node.js Engineer and code author. Produce a complete, production-ready npm CLI package that implements the feature described below.
+prompt: `
+      You are a Senior Node.js Engineer and CLI Architect.
+      Your task is to generate a robust, production-ready npm CLI package.
 
-USER REQUEST:
-"${prompt}"
+      USER REQUEST:
+      "${prompt}"
 
-CRITICAL TECHNICAL RULES (MUST be satisfied):
-1. Use ESM exclusively. All source files must use the import/export syntax. Do NOT use require().
-2. package.json must contain: "type": "module".
-3. index.js must start with the exact shebang on its own line:
-   #!/usr/bin/env node
-   (You MUST leave a blank line immediately after the shebang line).
-4. Do NOT minify code. Use readable indentation and newlines.
-5. Support Node.js >= 18. Provide "engines": { "node": ">=18" } in package.json.
-6. Provide a top-level "bin" entry in package.json pointing to index.js.
-   Example: "bin": { "my-cli-name": "./index.js" }
-7. Prefer the ESM-friendly versions of dependencies. If using chalk, use Chalk v5+ and its ESM API:
-   import chalk from 'chalk';
-   console.log(chalk.blue.bold('text'));
-8. Ensure cross-platform stability (Windows/Linux/Mac). The shebang must be on line 1 with a blank line after it.
-9. Do NOT use sudo, hardcoded paths, or network calls in tests.
+      --------------------------------------------------------
+      🛑 CRITICAL ANTI-PATTERNS (DO NOT DO THESE):
+      --------------------------------------------------------
+      1. **NO MINIFICATION**: Never write code on a single line.
+         - BAD:  #!/usr/bin/env node import x from 'y';console.log(x);
+         - GOOD: 
+           #!/usr/bin/env node
+           
+           import x from 'y';
+           console.log(x);
 
+      2. **NO REQUIRE**: Do NOT use 'require()'. Use ESM 'import'.
+      3. **NO MARKDOWN**: Do NOT wrap code in \`\`\` blocks inside the JSON string values.
+      4. **NO PLACEHOLDERS**: Do not write "// code goes here". Write the actual implementation.
 
-4. **NO MINIFICATION**: You MUST NOT minify the code. 
-         - Use real newlines. 
-         - Do NOT write code on a single line. 
-         - Code must be readable.
+      --------------------------------------------------------
+      ✅ TECHNICAL REQUIREMENTS (MUST FOLLOW):
+      --------------------------------------------------------
+      1. **package.json**: 
+         - Must include "type": "module".
+         - Must have a "bin" entry pointing to "./index.js".
+         - Must have "engines": { "node": ">=18" }.
+      
+      2. **index.js**: 
+         - Must start with exactly: #!/usr/bin/env node
+         - Followed immediately by a blank line.
+         - Use 'chalk', 'inquirer', 'boxen', 'open' if needed.
+      
+      3. **test.js**: 
+         - A simple, deterministic test using 'node:child_process'.
+         - It should run 'node index.js --help' or a safe command.
+         - It MUST exit with code 0 on success, and 1 on failure.
 
-OUTPUT FORMATTING RULES (Crucial for JSON parsing):
-1. Return PURE JSON. Do not include markdown formatting outside the JSON object.
-2. Inside the JSON values, return RAW code strings (no markdown fences).
-3. Proper escaping: Ensure all quotes inside the code strings are properly escaped so the JSON is valid.
+      --------------------------------------------------------
+      📦 OUTPUT FORMAT (STRICT JSON):
+      --------------------------------------------------------
+      Return ONLY a JSON object matching this schema. 
+      Ensure all strings inside the JSON are properly escaped (e.g., usage of quotes inside code).
 
-CONTENT REQUIREMENTS:
-1. package.json: Valid JSON with name, version, bin, type, dependencies, and scripts.
-2. index.js: The main CLI logic. Start with shebang. Use import.
-3. test.js: A simple script using child_process to verify the CLI runs (e.g., node index.js --help).
-4. README.md: Instructions on how to install and use.
+      Example of valid JSON structure for 'files':
+      [
+        {
+          "name": "index.js",
+          "content": "#!/usr/bin/env node\\n\\nimport chalk from 'chalk';\\n\\nconsole.log('Hello');"
+        }
+      ]
 
-SELF-CORRECTION CHECKS (must pass before returning):
-- No 'require' usages.
-- Shebang present on line 1 and line 2 is blank.
-- package.json is valid JSON and contains required fields.
-- test.js is executable by 'node test.js' and exits 0 on success.
-
-Return the package object now.
+      Generate the package now.
     `,
   });
 
@@ -72,7 +81,6 @@ Return the package object now.
 
 
 
-
 export async function fixPackageCode(prompt: string, errorLog: string) {
   console.log(`🚑 Asking Gemini to fix the build error...`);
 
@@ -80,17 +88,33 @@ export async function fixPackageCode(prompt: string, errorLog: string) {
     model: google('gemini-2.5-flash'),
     schema: PackageSchema,
     prompt: `
-      You previously wrote code for: "${prompt}".
-      However, it FAILED in the CI/CD pipeline.
+      You are a Senior Node.js Engineer.
       
-      HERE IS THE ERROR LOG:
+      CONTEXT:
+      You previously wrote a CLI tool for the user request: "${prompt}".
+      However, the build FAILED during the test phase.
+      
+      --------------------------------------------------------
+      🛑 THE ERROR LOG:
       ${errorLog}
+      --------------------------------------------------------
       
-      TASK:
-      Rewrite the package to fix the error. 
-      Keep the logic simple.
-      Ensure dependencies in package.json match the imports.
-      Fix any syntax errors shown in the logs.
+      YOUR MISSION (STRICT):
+      1. ANALYZE the error log to find the root cause (e.g., missing dependency, syntax error, wrong bin path).
+      2. FIX the specific error.
+      3. ♻️ RE-GENERATE THE FULL SOURCE CODE. 
+         - **CRITICAL**: Do NOT return a "stub" or "empty" index.js. 
+         - You MUST rewrite the complete logic for "${prompt}".
+         - If the index.js was working before, COPY IT BACK exactly as it was (but fix the error).
+         - Do not be lazy. The user needs the full feature set.
+         
+      FORMATTING RULES:
+      - Use ESM ('import').
+      - index.js MUST start with '#!/usr/bin/env node'.
+      - No minification.
+      - Ensure package.json "bin" matches the filename.
+
+      Generate the FIXED, COMPLETE package now.
     `,
   });
 
