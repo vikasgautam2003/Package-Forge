@@ -1,38 +1,3 @@
-// 'use server'
-
-// import { packageQueue } from "../lib/queue";
-
-// export async function createJob(formdata: FormData) {
-//   const prompt = formdata.get('prompt') as string;
-
-//   const job = await packageQueue.add('generate-package', { 
-//     prompt: prompt,
-//     user: "Vikas"
-//   });
-
-//   console.log("Job sent to queue!");
-//   return { success: true, jobId: job.id };
-// }
-
-
-
-
-// export async function checkJobStatus(jobId: string) {
-//   const job = await packageQueue.getJob(jobId);
-
-//   if (!job) {
-//     return { status: 'unknown', logs: [] };
-//   }
-
-//   const logs = await packageQueue.getJobLogs(jobId);
-//   const state = await job.getState();
-
-//   return {
-//     status: state,
-//     logs: logs.logs,
-//     result: job.returnvalue
-//   };
-// }
 
 
 
@@ -43,9 +8,10 @@
 // import { packageQueue } from "../lib/queue";
 // import fs from "fs/promises";
 // import path from "path";
+// import { existsSync } from "fs";
 
-// export async function createJob(formdata: FormData) {
-//   const prompt = formdata.get("prompt") as string;
+// export async function createJob(formData: FormData) {
+//   const prompt = formData.get("prompt") as string;
 //   const job = await packageQueue.add("generate-package", { 
 //     prompt,
 //     user: "Vikas"
@@ -60,44 +26,49 @@
 //   }
 //   const logs = await packageQueue.getJobLogs(jobId);
 //   const state = await job.getState();
-//   const result = job.returnvalue;
+  
+//   // Check 'data' (Live) or 'returnvalue' (Finished)
+//   const packageName = job.data.packageName || job.returnvalue?.packageName;
 
 //   return {
 //     status: state,
 //     logs: logs.logs,
-//     packageName: result?.packageName || null
+//     packageName: packageName || null
 //   };
 // }
 
 // export async function getGeneratedFiles(packageName: string) {
 //   try {
+//     // 1. Find Monorepo Root
+//     // Assuming we run from apps/web, going up 2 levels gets to root
 //     const repoRoot = path.resolve(process.cwd(), '../../'); 
+    
+//     // 2. Construct path to worker temp folder
 //     const projectPath = path.join(repoRoot, 'apps/worker/temp', packageName);
 
-//     console.log("\n🕵️ --- FILE DETECTIVE ---");
-//     console.log(`📍 Current Folder (CWD): ${process.cwd()}`);
-//     console.log(`🎯 Looking for package:  ${packageName}`);
-//     console.log(`📂 Full Target Path:     ${projectPath}`);
+//     // DEBUG LOGS (Look at your Next.js terminal)
+//     console.log(`🕵️ Fetching files from: ${projectPath}`);
 
 //     try {
 //       await fs.access(projectPath);
-//       console.log("✅ Folder FOUND!");
 //     } catch {
-//       console.log("❌ Folder NOT FOUND yet.");
-//       return []; 
+//       return []; // Folder doesn't exist yet
 //     }
 
 //     const files = await fs.readdir(projectPath);
-//     console.log(`Pg 📄 Found files: ${files.join(", ")}`);
-
+    
 //     const fileData = [];
 //     for (const file of files) {
 //       if (file.startsWith('.') || file === 'node_modules') continue;
-//       const content = await fs.readFile(path.join(projectPath, file), 'utf-8');
-//       fileData.push({ name: file, content });
+      
+//       const filePath = path.join(projectPath, file);
+//       // Only read files, skip folders
+//       if ((await fs.stat(filePath)).isFile()) {
+//           const content = await fs.readFile(filePath, 'utf-8');
+//           fileData.push({ name: file, content });
+//       }
 //     }
 
-//     console.log("--------------------------\n");
 //     return fileData;
 
 //   } catch (e: any) {
@@ -106,10 +77,11 @@
 //   }
 // }
 
-
 // export async function publishProject(jobId: string) {
 //   return { success: true, message: "Deploying..." };
 // }
+
+
 
 
 
@@ -139,7 +111,6 @@ export async function checkJobStatus(jobId: string) {
   const logs = await packageQueue.getJobLogs(jobId);
   const state = await job.getState();
   
-  // Check 'data' (Live) or 'returnvalue' (Finished)
   const packageName = job.data.packageName || job.returnvalue?.packageName;
 
   return {
@@ -151,20 +122,15 @@ export async function checkJobStatus(jobId: string) {
 
 export async function getGeneratedFiles(packageName: string) {
   try {
-    // 1. Find Monorepo Root
-    // Assuming we run from apps/web, going up 2 levels gets to root
     const repoRoot = path.resolve(process.cwd(), '../../'); 
-    
-    // 2. Construct path to worker temp folder
     const projectPath = path.join(repoRoot, 'apps/worker/temp', packageName);
 
-    // DEBUG LOGS (Look at your Next.js terminal)
     console.log(`🕵️ Fetching files from: ${projectPath}`);
 
     try {
       await fs.access(projectPath);
     } catch {
-      return []; // Folder doesn't exist yet
+      return [];
     }
 
     const files = await fs.readdir(projectPath);
@@ -174,7 +140,6 @@ export async function getGeneratedFiles(packageName: string) {
       if (file.startsWith('.') || file === 'node_modules') continue;
       
       const filePath = path.join(projectPath, file);
-      // Only read files, skip folders
       if ((await fs.stat(filePath)).isFile()) {
           const content = await fs.readFile(filePath, 'utf-8');
           fileData.push({ name: file, content });
@@ -189,6 +154,32 @@ export async function getGeneratedFiles(packageName: string) {
   }
 }
 
-export async function publishProject(jobId: string) {
-  return { success: true, message: "Deploying..." };
+// export async function publishProject(packageName: string) {
+
+//   console.log("SERVER publishProject CALLED with:", packageName);
+
+//   const job = await packageQueue.add('publish-component', { 
+//     prompt: "DEPLOY_ONLY",
+//     packageName: packageName,
+//     user: "Vikas" 
+//   });
+  
+//   return { success: true, jobId: job.id };
+// }
+
+
+
+
+
+
+export async function publishProject(packageName: string) {
+  console.log("SERVER publishProject CALLED with:", packageName);
+
+  const job = await packageQueue.add('publish-component', { 
+    prompt: "DEPLOY_ONLY",
+    packageName: packageName,
+    user: "Vikas" 
+  });
+  
+  return { success: true, jobId: job.id };
 }
