@@ -19,38 +19,68 @@ export default function MissionControl() {
 
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // --- Polling Logic ---
+  
+  // useEffect(() => {
+  //   if (!jobId) return;
+
+  //   const interval = setInterval(async () => {
+  //     const data = await checkJobStatus(jobId);
+
+  //     setLogs(data.logs);
+  //     setStatus(data.status);
+
+  //     if (data.packageName) {
+  //       setPackageName(data.packageName);
+
+       
+  //       const fetchedFiles = await getGeneratedFiles(data.packageName);
+  //       if (fetchedFiles.length > 0) {
+  //         setFiles(fetchedFiles);
+          
+  //         if (!selectedFile) setSelectedFile("index.js");
+  //       }
+  //     }
+  //   }, 1000);
+
+  //   return () => clearInterval(interval);
+  // }, [jobId, selectedFile]);
+
+
+
   useEffect(() => {
-    if (!jobId) return;
+  if (!jobId) return;
 
-    const interval = setInterval(async () => {
-      const data = await checkJobStatus(jobId);
+  const interval = setInterval(async () => {
+    const data = await checkJobStatus(jobId);
 
-      setLogs(data.logs);
-      setStatus(data.status);
+    setLogs(data.logs);
+    setStatus(data.status);
 
-      if (data.packageName) {
-        setPackageName(data.packageName);
+    if (data.packageName) {
+      setPackageName(data.packageName);
+    }
 
-        // Only fetch files if we haven't populated them yet or if it's a fresh generation
-        const fetchedFiles = await getGeneratedFiles(data.packageName);
-        if (fetchedFiles.length > 0) {
-          setFiles(fetchedFiles);
-          // Auto-select index.js if nothing is selected
-          if (!selectedFile) setSelectedFile("index.js");
-        }
+    if (data.status === 'completed') {
+      const fetchedFiles = await getGeneratedFiles(jobId);
+
+      if (fetchedFiles.length > 0) {
+        setFiles(fetchedFiles);
+
+        if (!selectedFile) setSelectedFile("index.js");
       }
-    }, 1000);
+    }
+  }, 1000);
 
-    return () => clearInterval(interval);
-  }, [jobId, selectedFile]);
+  return () => clearInterval(interval);
+}, [jobId, selectedFile]);
 
-  // --- Auto-scroll Logs ---
+
+
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  // --- Handlers ---
+
   async function handleSubmit(formData: FormData) {
     setLogs(["Initializing system..."]);
     setFiles([]);
@@ -79,7 +109,7 @@ export default function MissionControl() {
     }
   }
 
-  // --- Render ---
+  
   return (
     <div className="h-screen w-full bg-[#0a0a0a] text-white flex overflow-hidden font-mono">
       <ChatInterface 

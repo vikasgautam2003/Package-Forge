@@ -120,39 +120,70 @@ export async function checkJobStatus(jobId: string) {
   };
 }
 
-export async function getGeneratedFiles(packageName: string) {
-  try {
-    const repoRoot = path.resolve(process.cwd(), '../../'); 
-    const projectPath = path.join(repoRoot, 'apps/worker/temp', packageName);
+// export async function getGeneratedFiles(packageName: string) {
+//   try {
+//     const repoRoot = path.resolve(process.cwd(), '../../'); 
+//     const projectPath = path.join(repoRoot, 'apps/worker/temp', packageName);
 
-    console.log(`🕵️ Fetching files from: ${projectPath}`);
+//     console.log(`🕵️ Fetching files from: ${projectPath}`);
 
-    try {
-      await fs.access(projectPath);
-    } catch {
-      return [];
-    }
+//     try {
+//       await fs.access(projectPath);
+//     } catch {
+//       return [];
+//     }
 
-    const files = await fs.readdir(projectPath);
+//     const files = await fs.readdir(projectPath);
     
-    const fileData = [];
-    for (const file of files) {
-      if (file.startsWith('.') || file === 'node_modules') continue;
+//     const fileData = [];
+//     for (const file of files) {
+//       if (file.startsWith('.') || file === 'node_modules') continue;
       
-      const filePath = path.join(projectPath, file);
-      if ((await fs.stat(filePath)).isFile()) {
-          const content = await fs.readFile(filePath, 'utf-8');
-          fileData.push({ name: file, content });
-      }
+//       const filePath = path.join(projectPath, file);
+//       if ((await fs.stat(filePath)).isFile()) {
+//           const content = await fs.readFile(filePath, 'utf-8');
+//           fileData.push({ name: file, content });
+//       }
+//     }
+
+//     return fileData;
+
+//   } catch (e: any) {
+//     console.error("🔥 CRITICAL READ ERROR:", e.message);
+//     return [];
+//   }
+// }
+
+
+
+
+
+export async function getGeneratedFiles(jobId: string) {
+  try {
+    const job = await projectQueue.getJob(jobId);
+
+    if (!job) return [];
+
+    const state = await job.getState();
+    if (state !== 'completed') return [];
+
+    const result = job.returnvalue;
+    
+    if (result && result.files) {
+      console.log(`📦 Retrieved ${result.files.length} files from Redis for Job ${jobId}`);
+      return result.files;
     }
 
-    return fileData;
-
-  } catch (e: any) {
-    console.error("🔥 CRITICAL READ ERROR:", e.message);
+    return [];
+  } catch (e) {
+    console.error("Error fetching files from Redis:", e);
     return [];
   }
 }
+
+
+
+
 
 // export async function publishProject(packageName: string) {
 
